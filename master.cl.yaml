@@ -1,0 +1,59 @@
+---
+etcd:
+  name: "{HOSTNAME}"
+  listen_peer_urls: http://{PRIVATE_IPV4}:2380
+  listen_client_urls: http://0.0.0.0:2379
+  initial_advertise_peer_urls: http://{PRIVATE_IPV4}:2380
+  advertise_client_urls: http://{PRIVATE_IPV4}:2379
+  initial_cluster_token: 18db6f70-b597-427f-b10c-3801d8c2fcef
+  initial_cluster: master=http://{PRIVATE_IPV4}:2380
+  initial_cluster_state: new
+systemd:
+  units:
+  - name: flanneld.service
+    enable: true
+    dropins:
+    - name: 40-ExecStartPre-symlink.conf
+      contents: |
+        [Service]
+        ExecStartPre=/usr/bin/ln -sf /etc/flannel/options.env /run/flannel/options.env
+  - name: docker.service
+    enable: true
+    dropins:
+    - name: 40-flannel.conf
+      contents: |
+        [Unit]
+        Requires=flanneld.service
+        After=flanneld.service
+        [Service]
+        EnvironmentFile=/etc/kubernetes/cni/docker_opts_cni.env
+  - name: kubelet.service
+    enable: true
+    contents: |
+      [Service]
+      Environment=KUBELET_VERSION=v1.5.2_coreos.0
+      Environment="RKT_OPTS=--uuid-file-save=/var/run/kubelet-pod.uuid \
+        --volume var-log,kind=host,source=/var/log \
+        --mount volume=var-log,target=/var/log \
+        --volume dns,kind=host,source=/etc/resolv.conf \
+        --mount volume=dns,target=/etc/resolv.conf"
+      ExecStartPre=/usr/bin/mkdir -p /etc/kubernetes/manifests
+      ExecStartPre=/usr/bin/mkdir -p /var/log/containers
+      ExecStartPre=-/usr/bin/rkt rm --uuid-file=/var/run/kubelet-pod.uuid
+      ExecStart=/usr/lib/coreos/kubelet-wrapper \
+        --api-servers=http://127.0.0.1:8080 \
+        --register-schedulable=false \
+        --cni-conf-dir=/etc/kubernetes/cni/net.d \
+        --network-plugin=${NETWORK_PLUGIN} \
+        --container-runtime=docker \
+        --allow-privileged=true \
+        --pod-manifest-path=/etc/kubernetes/manifests \
+        --hostname-override=172.17.8.100 \
+        --cluster_dns=10.3.0.10 \
+        --cluster_domain=cluster.local
+      ExecStop=-/usr/bin/rkt stop --uuid-file=/var/run/kubelet-pod.uuid
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target

@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: app
+  labels:
+    app: bravi
+    tier: srv
+spec:
+  type: LoadBalancer
+  externalIPs:
+  - 172.17.8.101
+  ports:
+  - port: 3000
+  selector:
+    app: bravi
+    tier: app
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: app
+  labels:
+    app: bravi
+    tier: app
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: bravi
+      tier: app
+  template:
+    metadata:
+      labels:
+        app: bravi
+        tier: app
+    spec:
+      volumes:
+      - name: vol
+        hostPath:
+          path: /tmp/application
+      containers:
+      - name: myhostname
+        image: node:4
+        workingDir: /application
+        command: ["node", "/application/server.js"]
+        volumeMounts:
+        - name: vol
+          mountPath: /application
+        ports:
+        - containerPort: 3000
