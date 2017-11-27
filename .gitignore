@@ -5,3 +5,4 @@ config.ign.merged
 *.img
 .srl
 ssl/out/*
+!ssl/out/.gitkeep
